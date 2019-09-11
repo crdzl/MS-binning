@@ -1,0 +1,76 @@
+#These are the binning and centroid functions
+
+bin<-function(spectra,absolute,ppm=0){
+	colnames(spectra)<-c("mz","int");
+	spectra<-spectra[spectra[,"int"]>0,];
+	aux.mz<-as.matrix(spectra);	
+	aux.mz<-aux.mz[order(aux.mz[,"mz"]),];
+	problemas<-mz<-mz.max<-mz.min<-c();
+	while (nrow(aux.mz)>0){
+		idx<-which.max(aux.mz[,"int"])
+		in.range<-which(abs(aux.mz[,"mz"]-aux.mz[idx,"mz"])<=max((aux.mz[idx,"mz"]*ppm/(1e6)),absolute));
+		current.mz<-aux.mz[in.range,"mz"];
+		
+		new.min<-aux.mz[idx,"mz"]-max((aux.mz[idx,"mz"]*ppm/(1e6)),absolute);
+		new.idx<-which((mz.min<new.min)&(mz.max>new.min));
+		if (length(new.idx)>0){
+			new.min<-mz.max[new.idx];
+		}
+		
+		new.max<-aux.mz[idx,"mz"]+max((aux.mz[idx,"mz"]*ppm/(1e6)),absolute);
+		new.idx<-which((mz.min<new.max)&(mz.max>new.max));
+		if (length(new.idx)>0){
+			new.max<-mz.min[new.idx];
+		}
+	
+		mz.min<-c(mz.min,new.min);
+		mz.max<-c(mz.max,new.max);
+		aux.mz<-aux.mz[-in.range,]
+		if (!is.matrix(aux.mz)){
+			if (length(aux.mz)>0){
+				aux.mz<-t(as.matrix(aux.mz));
+			}
+		}
+		
+	}
+	
+	return(cbind(mz.min,mz.max));
+}
+
+to.centroid<-function(spectra,absolute=FALSE,ppm=FALSE, mz.method=c("weighted","top"), int.method=c("max","sum"), bins=FALSE){
+	colnames(spectra)<-c("mz","int");
+	
+	if (!is.matrix(bins)) {
+		bins<-bin(spectra,absolute,ppm);
+	}
+	colnames(bins)<-c("mz.min","mz.max");
+	
+	new.spectra<-matrix(0,nrow(bins),2);
+	colnames(new.spectra)<-c("mz","int");
+	for (i in 1:nrow(new.spectra)){
+		idx<-which((spectra[,"mz"]>bins[i,"mz.min"])&(spectra[,"mz"]<bins[i,"mz.max"]));
+		sub.spec<-spectra[idx,];
+		if (length(idx)>1){
+			if (mz.method=="top"){
+				new.mz<-sub.spec[which.max(sub.spec[,"int"]),"mz"];
+			} else {
+				aux<-sub.spec;
+				aux[,"int"]<-aux[,"int"]/sum(aux[,"int"]);
+				new.mz<-sum(aux[,"mz"]*aux[,"int"]);
+			}
+			
+			if (int.method=="sum"){
+				new.int<-sum(sub.spec[,"int"]);
+			} else {
+				new.int<-max(sub.spec[,"int"])[1];
+			}
+		} else {
+			new.int<-sub.spec["int"];
+			new.mz<-sub.spec["mz"];
+		}
+		new.spectra[i,"mz"]<-new.mz;
+		new.spectra[i,"int"]<-new.int;
+	}
+	
+	return(new.spectra);
+}
